@@ -30,16 +30,21 @@ fn main() {
 
     let mut app = App::new(window);
 
+    let fps: u32 = 60;
+    let frame_interval = Duration::new(0, 1000000000u32 / fps);
+    let mut frame_count = 0;
+
     let mut destroying = false;
     let mut i = 0;
     event_loop.run(move |event, _, control_flow| {
+        let frame_start = Instant::now();
+
         *control_flow = ControlFlow::Poll;
 
         match event {
             // Render a frame if our Vulkan app is not being destroyed.
             Event::MainEventsCleared if !destroying => {
-                println!("{i}");
-                i += 1;
+                println!("{frame_count}");
                 app.render();
             }
             // Destroy our Vulkan app.
@@ -48,6 +53,13 @@ fn main() {
                 *control_flow = ControlFlow::Exit;
             }
             _ => {}
+        }
+
+        // Limit to FPS
+        frame_count += 1;
+        let delta = frame_start.elapsed();
+        if delta < frame_interval {
+            sleep(frame_interval - delta);
         }
     });
 
@@ -453,4 +465,8 @@ fn get_swapchain_extent(window: &Window, capabilities: vk::SurfaceCapabilitiesKH
             ))
             .build()
     }
+}
+
+unsafe fn create_pipeline(device: &Device) -> () {
+    
 }
