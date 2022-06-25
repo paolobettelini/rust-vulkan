@@ -1,3 +1,6 @@
+use std::time::{Duration, Instant};
+use std::thread::sleep;
+
 use vulkanalia::{
     loader::{LibloadingLoader, LIBRARY},
     window as vk_window,
@@ -58,11 +61,11 @@ struct App {
     device: Device,
     physical_device: vk::PhysicalDevice,
     queue_container: QueueContainer,
-
     swapchain: vk::SwapchainKHR,
     swapchain_format: vk::Format,
     swapchain_extent: vk::Extent2D,
     swapchain_images: Vec<vk::Image>,
+    swapchain_image_views: Vec<vk::ImageView>
 }
 
 impl App {
@@ -79,6 +82,7 @@ impl App {
                 swapchain_format,
                 swapchain_extent) = create_swapchain(&window, &instance, &device, physical_device, surface);
             let swapchain_images = device.get_swapchain_images_khr(swapchain).unwrap();
+            let swapchain_image_views = create_swapchain_image_views(&device, &swapchain_images, swapchain_format);
 
             Self {
                 surface: surface,
@@ -92,6 +96,7 @@ impl App {
                 swapchain_format: swapchain_format,
                 swapchain_extent: swapchain_extent,
                 swapchain_images: swapchain_images,
+                swapchain_image_views: swapchain_image_views
             }
         }
     }
@@ -148,14 +153,46 @@ unsafe fn create_swapchain(window: &Window, instance: &Instance, device: &Device
     (swapchain, surface_format.format, extent)
 }
 
+unsafe fn create_swapchain_image_views(device: &Device, images: &Vec<vk::Image>, swapchain_format: vk::Format) -> Vec<vk::ImageView> {
+    images
+        .iter()
+        .map(|image| {
+            let components = vk::ComponentMapping::builder()
+                .r(vk::ComponentSwizzle::IDENTITY)
+                .g(vk::ComponentSwizzle::IDENTITY)
+                .b(vk::ComponentSwizzle::IDENTITY)
+                .a(vk::ComponentSwizzle::IDENTITY);
+
+            let subresource_range = vk::ImageSubresourceRange::builder()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .base_mip_level(0)
+                .level_count(1)
+                .base_array_layer(0)
+                .layer_count(1);
+
+            let info = vk::ImageViewCreateInfo::builder()
+                .image(*image)
+                .view_type(vk::ImageViewType::_2D)
+                .format(swapchain_format)
+                .components(components)
+                .subresource_range(subresource_range);
+
+            device.create_image_view(&info, None)
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap()
+}
+
 impl Drop for App {
     fn drop(&mut self) {
         unsafe {
-            // self.device.destroy_swapchain_khr(self.swapchain, None);
             self.device.destroy_device(None);
             self.instance.destroy_surface_khr(self.surface, None);
             self.instance.destroy_instance(None);
             self.device.destroy_swapchain_khr(self.swapchain, None);
+            self.swapchain_image_views
+                .iter()
+                .for_each(|view| self.device.destroy_image_view(*view, None));
         }
     }
 }
